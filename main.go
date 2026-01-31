@@ -7,10 +7,23 @@ import (
 	"strconv"
 )
 
+type Produk struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Price int    `json:"price"`
+	Stock int    `json:"stock"`
+}
+
 type Category struct {
 	ID          int    `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+}
+
+var products = []Produk{
+	{ID: 1, Name: "iPhone 13", Price: 999, Stock: 50},
+	{ID: 2, Name: "MacBook Pro", Price: 1999, Stock: 30},
+	{ID: 3, Name: "PlayStation 5", Price: 499, Stock: 20},
 }
 
 var categories = []Category{
@@ -34,6 +47,94 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 func parseIDFromPath(r *http.Request) (int, error) {
 	idStr := r.PathValue("id")
 	return strconv.Atoi(idStr)
+}
+
+func getProducts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(products)
+}
+
+func addProduct(w http.ResponseWriter, r *http.Request) {
+	// read data from request
+	var newProduct Produk
+	err := json.NewDecoder(r.Body).Decode(&newProduct)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	// add data to products
+	newProduct.ID = len(products) + 1
+	products = append(products, newProduct)
+
+	respondWithJSON(w, http.StatusCreated, newProduct)
+}
+
+func getProductById(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Product Id")
+		return
+	}
+
+	for _, product := range products {
+		if product.ID == id {
+			respondWithJSON(w, http.StatusOK, product)
+			return
+		}
+	}
+
+	respondWithError(w, http.StatusNotFound, "Product not found")
+}
+
+func updateProduct(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Product Id")
+		return
+	}
+
+	// get data from request
+	var newProduct Produk
+	err = json.NewDecoder(r.Body).Decode(&newProduct)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	// loop products, find match id and change by new product
+	for i := range products {
+		if products[i].ID == id {
+			newProduct.ID = id
+			products[i] = newProduct
+			respondWithJSON(w, http.StatusOK, newProduct)
+			return
+		}
+	}
+
+	respondWithError(w, http.StatusNotFound, "Product not found")
+}
+
+func deleteProduct(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromPath(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Product ID")
+		return
+	}
+
+	// loop products, and delete the product if id found
+	for i, product := range products {
+		if product.ID == id {
+			// Create a new slice with the previous and next index data.
+			products = append(products[:i], products[i+1:]...)
+			respondWithJSON(w, http.StatusOK, map[string]string{
+				"message": "Product deleted successfully",
+			})
+			return
+		}
+	}
+
+	respondWithError(w, http.StatusNotFound, "Product not found")
 }
 
 func getCategories(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +227,14 @@ func deleteCategory(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	mux := http.NewServeMux()
+	// Product routes
+	mux.HandleFunc("GET /products", getProducts)
+	mux.HandleFunc("POST /products", addProduct)
+	mux.HandleFunc("GET /products/{id}", getProductById)
+	mux.HandleFunc("PUT /products/{id}", updateProduct)
+	mux.HandleFunc("DELETE /products/{id}", deleteProduct)
+
+	// Category routes
 	mux.HandleFunc("GET /categories", getCategories)
 	mux.HandleFunc("POST /categories", addCategory)
 	mux.HandleFunc("GET /categories/{id}", getCategoryById)
