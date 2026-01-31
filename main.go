@@ -3,256 +3,89 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"kasir-api/database"
+	"kasir-api/handlers"
+	"kasir-api/repositories"
+	"kasir-api/services"
+	"log"
 	"net/http"
-	"strconv"
+	"os"
+	"strings"
+
+	"github.com/spf13/viper"
 )
 
-type Produk struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Price int    `json:"price"`
-	Stock int    `json:"stock"`
-}
-
-type Category struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-var products = []Produk{
-	{ID: 1, Name: "iPhone 13", Price: 999, Stock: 50},
-	{ID: 2, Name: "MacBook Pro", Price: 1999, Stock: 30},
-	{ID: 3, Name: "PlayStation 5", Price: 499, Stock: 20},
-}
-
-var categories = []Category{
-	{ID: 1, Name: "Smartphone", Description: "A mobile phone with advanced computing capabilities"},
-	{ID: 2, Name: "Laptop", Description: "A portable, all-in-one personal computer with a built-in screen, keyboard, and battery"},
-	{ID: 3, Name: "Game Console", Description: "A specialized electronic device, essentially a dedicated computer, designed primarily for playing video games"},
-}
-
-func respondWithError(w http.ResponseWriter, code int, message string) {
-	respondWithJSON(w, code, map[string]string{"error": message})
-}
-
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
-}
-
-func parseIDFromPath(r *http.Request) (int, error) {
-	idStr := r.PathValue("id")
-	return strconv.Atoi(idStr)
-}
-
-func getProducts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(products)
-}
-
-func addProduct(w http.ResponseWriter, r *http.Request) {
-	// read data from request
-	var newProduct Produk
-	err := json.NewDecoder(r.Body).Decode(&newProduct)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-
-	// add data to products
-	newProduct.ID = len(products) + 1
-	products = append(products, newProduct)
-
-	respondWithJSON(w, http.StatusCreated, newProduct)
-}
-
-func getProductById(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Product Id")
-		return
-	}
-
-	for _, product := range products {
-		if product.ID == id {
-			respondWithJSON(w, http.StatusOK, product)
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Product not found")
-}
-
-func updateProduct(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Product Id")
-		return
-	}
-
-	// get data from request
-	var newProduct Produk
-	err = json.NewDecoder(r.Body).Decode(&newProduct)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request")
-		return
-	}
-
-	// loop products, find match id and change by new product
-	for i := range products {
-		if products[i].ID == id {
-			newProduct.ID = id
-			products[i] = newProduct
-			respondWithJSON(w, http.StatusOK, newProduct)
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Product not found")
-}
-
-func deleteProduct(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Product ID")
-		return
-	}
-
-	// loop products, and delete the product if id found
-	for i, product := range products {
-		if product.ID == id {
-			// Create a new slice with the previous and next index data.
-			products = append(products[:i], products[i+1:]...)
-			respondWithJSON(w, http.StatusOK, map[string]string{
-				"message": "Product deleted successfully",
-			})
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Product not found")
-}
-
-func getCategories(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(categories)
-}
-
-func addCategory(w http.ResponseWriter, r *http.Request) {
-	// read data from request
-	var newCategory Category
-	err := json.NewDecoder(r.Body).Decode(&newCategory)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-
-	// add data to categories
-	newCategory.ID = len(categories) + 1
-	categories = append(categories, newCategory)
-
-	respondWithJSON(w, http.StatusCreated, newCategory)
-}
-
-func getCategoryById(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Category Id")
-		return
-	}
-
-	for _, category := range categories {
-		if category.ID == id {
-			respondWithJSON(w, http.StatusOK, category)
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Category not found")
-}
-
-func updateCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Category Id")
-		return
-	}
-
-	// get data from request
-	var newCategory Category
-	err = json.NewDecoder(r.Body).Decode(&newCategory)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request")
-		return
-	}
-
-	// loop categories, find match id and change by new category
-	for i := range categories {
-		if categories[i].ID == id {
-			newCategory.ID = id
-			categories[i] = newCategory
-			respondWithJSON(w, http.StatusOK, newCategory)
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Category not found")
-}
-
-func deleteCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDFromPath(r)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid Category ID")
-		return
-	}
-
-	// loop categories, and delete the category if id found
-	for i, category := range categories {
-		if category.ID == id {
-			// Create a new slice with the previous and next index data.
-			categories = append(categories[:i], categories[i+1:]...)
-			respondWithJSON(w, http.StatusOK, map[string]string{
-				"message": "Category deleted successfully",
-			})
-			return
-		}
-	}
-
-	respondWithError(w, http.StatusNotFound, "Category not found")
+type Config struct {
+	Port   string `mapstructure:"PORT"`
+	DBConn string `mapstructure:"DB_CONN"`
 }
 
 func main() {
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	if _, err := os.Stat(".env"); err == nil {
+		viper.SetConfigFile(".env")
+		_ = viper.ReadInConfig()
+	}
+
+	config := Config{
+		Port:   viper.GetString("PORT"),
+		DBConn: viper.GetString("DB_CONN"),
+	}
+
+	// Setup database
+	db, err := database.InitDB(config.DBConn)
+	if err != nil {
+		log.Fatal("Failed to initialize database:", err)
+	}
+	defer db.Close()
+
 	mux := http.NewServeMux()
+
+	productRepo := repositories.NewProductRepository(db)
+	productService := services.NewProductService(productRepo)
+	productHandler := handlers.NewProductHandler(productService)
+
 	// Product routes
-	mux.HandleFunc("GET /products", getProducts)
-	mux.HandleFunc("POST /products", addProduct)
-	mux.HandleFunc("GET /products/{id}", getProductById)
-	mux.HandleFunc("PUT /products/{id}", updateProduct)
-	mux.HandleFunc("DELETE /products/{id}", deleteProduct)
+	mux.HandleFunc("GET /api/products", productHandler.GetProducts)
+	mux.HandleFunc("POST /api/products", productHandler.AddProduct)
+	mux.HandleFunc("GET /api/products/{id}", productHandler.GetProductById)
+	mux.HandleFunc("PUT /api/products/{id}", productHandler.UpdateProduct)
+	mux.HandleFunc("DELETE api/products/{id}", productHandler.DeleteProduct)
+
+	categoryRepo := repositories.NewCategoryRepository(db)
+	categoryService := services.NewCategoryService(categoryRepo)
+	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
 	// Category routes
-	mux.HandleFunc("GET /categories", getCategories)
-	mux.HandleFunc("POST /categories", addCategory)
-	mux.HandleFunc("GET /categories/{id}", getCategoryById)
-	mux.HandleFunc("PUT /categories/{id}", updateCategory)
-	mux.HandleFunc("DELETE /categories/{id}", deleteCategory)
+	mux.HandleFunc("GET /api/categories", categoryHandler.GetCategories)
+	mux.HandleFunc("POST /api/categories", categoryHandler.AddCategory)
+	mux.HandleFunc("GET /api/categories/{id}", categoryHandler.GetCategoryById)
+	mux.HandleFunc("PUT /api/categories/{id}", categoryHandler.UpdateCategory)
+	mux.HandleFunc("DELETE /api/categories/{id}", categoryHandler.DeleteCategory)
 
 	// localhost:8080/health
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		respondWithJSON(w, http.StatusOK, map[string]string{
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
 			"status":  "OK",
 			"message": "API Running",
 		})
 	})
 
-	fmt.Println("Server running on localhost:8080")
+	// localhost:8080/health
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "OK",
+			"message": "API Running",
+		})
+	})
+	fmt.Println("Server running di localhost:" + config.Port)
 
-	err := http.ListenAndServe(":8080", mux)
+	err = http.ListenAndServe(":"+config.Port, mux)
 	if err != nil {
-		fmt.Println("Failed to running server")
+		fmt.Println("gagal running server")
 	}
 }

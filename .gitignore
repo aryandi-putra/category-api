@@ -1,3 +1,4 @@
 category-api
 category-api.exe
 *.log
+.env
